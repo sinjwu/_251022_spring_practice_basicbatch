@@ -9,7 +9,10 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.database.JpaItemWriter;
 import org.springframework.batch.item.database.Order;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
@@ -39,7 +42,7 @@ public class BatchConfig {
     @Bean
     public Step helloWorldStep() {
         return new StepBuilder("helloWorldStep", jobRepository)
-                .<Message, Message>chunk(3)
+                .<Message, Message>chunk(3, transactionManager)
                 .reader(messageItemReader())
                 .processor(messageItemProcessor())
                 .writer(messageItemWriter())
@@ -58,5 +61,24 @@ public class BatchConfig {
                 .sortKeys(Map.of("id", Order.ASCENDING))
                 .rowMapper(new BeanPropertyRowMapper<>(Message.class))
                 .build();
+    }
+
+    @Bean
+    public ItemProcessor<Message, Message> messageItemProcessor() {
+        return message -> {
+            log.info("처리 중인 메시지: {}", message.getContent());
+            String processedContent = "Hello, World! " + message.getContent() + " (processed by " + message.getAuthor() + ")";
+            message.setProcessedContent(processedContent);
+            message.setProcessed(true);
+            log.info("처리 완료: {}", processedContent);
+            return message;
+        };
+    }
+
+    @Bean
+    public ItemWriter<Message> messageItemWriter() {
+        JpaItemWriter<Message> writer = new JpaItemWriter<>();
+        writer.setEntityManagerFactory(entityManagerFactory);
+        return writer;
     }
 }
